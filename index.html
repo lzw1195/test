@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Heatmap and Markers</title>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAJhMG_t2IcSck60ta18BPFRxiTOmXHaeU&libraries=visualization"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+</head>
+<body>
+<div>
+    <label for="year-select">Select Year:</label>
+    <select id="year-select">
+        <option value="2021">2021</option>
+        <option value="2022">2022</option>
+        <option value="2023">2023</option>
+    </select>
+
+    <label for="platform-select">Select Platform:</label>
+    <select id="platform-select">
+        <option value="platform1">Platform 1</option>
+        <option value="platform2">Platform 2</option>
+        <option value="platform3">Platform 3</option>
+    </select>
+
+    <button id="load-data">Load Data</button>
+</div>
+
+<div id="map" style="height: 500px; width: 100%;"></div>
+
+<button id="toggle-heatmap">Toggle Heatmap</button>
+<button id="change-gradient">Change Gradient</button>
+<button id="change-opacity">Change Opacity</button>
+<button id="change-radius">Change Radius</button>
+
+<script>
+    let map, heatmap;
+
+    function initMap() {
+        map = new google.maps.Map(document.getElementById("map"), {
+            zoom: 13,
+            center: { lat: 34.981213, lng: 139.828853 },
+            mapTypeId: "satellite",
+        });
+
+        document.getElementById("load-data").addEventListener("click", function() {
+            const year = document.getElementById("year-select").value;
+            const platform = document.getElementById("platform-select").value;
+            // const csvFilePath = `https://somle-bigdata.oss-cn-hangzhou.aliyuncs.com/orders_${year}_${platform}.csv?Expires=1719475827&OSSAccessKeyId=TMP.3Kh7gYfnvoTrpYWwEUKnvfkgnhQoRgbty3KnkD661JGPM9LxcWHisW6Y4uFWdN8tbGmChnEVLxGCDnwbFoZWFocicf6fdB&Signature=rkN%2FzrUr2bjF6tPSJ5xXnZq839Q%3D`;
+            const csvFilePath = `https://somle-huaweiyun.obs.ap-southeast-1.myhuaweicloud.com/orders_${year}_${platform}.csv`;
+            // const csvFilePath = `https://somle-huaweiyun.obs.ap-southeast-1.myhuaweicloud.com/orders_2021_platform1.csv`;
+            // const csvFilePath = `https://somle-bigdata.oss-cn-hangzhou.aliyuncs.com/orders_${year}_${platform}.csv?Expires=1719475827&OSSAccessKeyId=TMP.3Kh7gYfnvoTrpYWwEUKnvfkgnhQoRgbty3KnkD661JGPM9LxcWHisW6Y4uFWdN8tbGmChnEVLxGCDnwbFoZWFocicf6fdB&Signature=rkN%2FzrUr2bjF6tPSJ5xXnZq839Q%3D`;
+                                 // https://somle-bigdata.oss-cn-hangzhou.aliyuncs.com/orders_2021_platform1     .csv?Expires=1719475827&OSSAccessKeyId=TMP.3Kh7gYfnvoTrpYWwEUKnvfkgnhQoRgbty3KnkD661JGPM9LxcWHisW6Y4uFWdN8tbGmChnEVLxGCDnwbFoZWFocicf6fdB&Signature=rkN%2FzrUr2bjF6tPSJ5xXnZq839Q%3D
+            // Fetch CSV data
+            fetch(csvFilePath)
+                .then(response => response.text())
+                .then(csvText => {
+                    getPoints(csvText, function(points, markers) {
+                        if (heatmap) {
+                            heatmap.setMap(null);
+                        }
+
+                        heatmap = new google.maps.visualization.HeatmapLayer({
+                            data: points,
+                            map: map,
+                        });
+
+                        markers.forEach(markerData => {
+                            const marker = new google.maps.Marker({
+                                position: markerData.position,
+                                map: map,
+                            });
+
+                            const infoWindow = new google.maps.InfoWindow({
+                                content: markerData.info,
+                            });
+
+                            marker.addListener('click', () => {
+                                infoWindow.open(map, marker);
+                            });
+                        });
+                    });
+                })
+                .catch(error => console.error('Error fetching CSV file:', error));
+        });
+
+        document.getElementById("toggle-heatmap").addEventListener("click", toggleHeatmap);
+        document.getElementById("change-gradient").addEventListener("click", changeGradient);
+        document.getElementById("change-opacity").addEventListener("click", changeOpacity);
+        document.getElementById("change-radius").addEventListener("click", changeRadius);
+    }
+
+    function toggleHeatmap() {
+        heatmap.setMap(heatmap.getMap() ? null : map);
+    }
+
+    function changeGradient() {
+        const gradient = [
+            "rgba(0, 255, 255, 0)",
+            "rgba(0, 255, 255, 1)",
+            "rgba(0, 191, 255, 1)",
+            "rgba(0, 127, 255, 1)",
+            "rgba(0, 63, 255, 1)",
+            "rgba(0, 0, 255, 1)",
+            "rgba(0, 0, 223, 1)",
+            "rgba(0, 0, 191, 1)",
+            "rgba(0, 0, 159, 1)",
+            "rgba(0, 0, 127, 1)",
+            "rgba(63, 0, 91, 1)",
+            "rgba(127, 0, 63, 1)",
+            "rgba(191, 0, 31, 1)",
+            "rgba(255, 0, 0, 1)",
+        ];
+
+        heatmap.set("gradient", heatmap.get("gradient") ? null : gradient);
+    }
+
+    function changeRadius() {
+        heatmap.set("radius", heatmap.get("radius") ? null : 20);
+    }
+
+    function changeOpacity() {
+        heatmap.set("opacity", heatmap.get("opacity") ? null : 0.2);
+    }
+
+    function getPoints(csvText, callback) {
+        const points = [];
+        const markers = [];
+        Papa.parse(csvText, {
+            header: true,
+            dynamicTyping: true,
+            complete: function(results) {
+                results.data.forEach(row => {
+                    if (row.lat && row.lon && row.name) {
+                        const position = new google.maps.LatLng(row.lat, row.lon);
+                        points.push(position);
+                        markers.push({
+                            position: position,
+                            info: `Order: ${row.name}<br>Lat: ${row.lat}<br>Lon: ${row.lon}`
+                        });
+                    }
+                });
+                callback(points, markers);
+            }
+        });
+    }
+
+    function loadScript() {
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyAJhMG_t2IcSck60ta18BPFRxiTOmXHaeU&libraries=visualization&callback=initMap`;
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+    }
+
+    document.addEventListener("DOMContentLoaded", loadScript);
+</script>
+</body>
+</html>
