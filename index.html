@@ -4,35 +4,73 @@
     <title>Heatmap and Markers</title>
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAJhMG_t2IcSck60ta18BPFRxiTOmXHaeU&libraries=visualization"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+        }
+
+        label {
+            margin-right: 10px;
+        }
+
+        select, button {
+            padding: 10px;
+            margin-right: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            font-size: 14px;
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        #map {
+            height: 900px;
+            width: 100%;
+        }
+    </style>
 </head>
 <body>
-<div>
+<div class="controls">
     <label for="year-select">Select Year:</label>
     <select id="year-select">
-        <option value="2021">2021</option>
-        <option value="2022">2022</option>
-        <option value="2023">2023</option>
+        <option value="2024">2021</option>
+<!--        <option value="2022">2022</option>-->
+<!--        <option value="2023">2023</option>-->
     </select>
 
     <label for="platform-select">Select Platform:</label>
     <select id="platform-select">
-        <option value="platform1">Platform 1</option>
-        <option value="platform2">Platform 2</option>
-        <option value="platform3">Platform 3</option>
+        <option value="all">All Platforms</option>
     </select>
 
     <button id="load-data">Load Data</button>
 </div>
 
-<div id="map" style="height: 500px; width: 100%;"></div>
+<div id="map"></div>
 
-<button id="toggle-heatmap">Toggle Heatmap</button>
-<button id="change-gradient">Change Gradient</button>
-<button id="change-opacity">Change Opacity</button>
-<button id="change-radius">Change Radius</button>
+<div class="controls">
+    <button id="toggle-heatmap">Toggle Heatmap</button>
+    <button id="change-gradient">Change Gradient</button>
+    <button id="change-opacity">Change Opacity</button>
+    <button id="change-radius">Change Radius</button>
+    <button id="toggle-markers">Toggle Markers</button>
+</div>
 
 <script>
-    let map, heatmap;
+    let map, heatmap, markers = [];
+    let markersVisible = true;
 
     function initMap() {
         map = new google.maps.Map(document.getElementById("map"), {
@@ -43,17 +81,14 @@
 
         document.getElementById("load-data").addEventListener("click", function() {
             const year = document.getElementById("year-select").value;
-            const platform = document.getElementById("platform-select").value;
-            // const csvFilePath = `https://somle-bigdata.oss-cn-hangzhou.aliyuncs.com/orders_${year}_${platform}.csv?Expires=1719475827&OSSAccessKeyId=TMP.3Kh7gYfnvoTrpYWwEUKnvfkgnhQoRgbty3KnkD661JGPM9LxcWHisW6Y4uFWdN8tbGmChnEVLxGCDnwbFoZWFocicf6fdB&Signature=rkN%2FzrUr2bjF6tPSJ5xXnZq839Q%3D`;
-            const csvFilePath = `https://somle-huaweiyun.obs.ap-southeast-1.myhuaweicloud.com/orders_${year}_${platform}.csv`;
-            // const csvFilePath = `https://somle-huaweiyun.obs.ap-southeast-1.myhuaweicloud.com/orders_2021_platform1.csv`;
-            // const csvFilePath = `https://somle-bigdata.oss-cn-hangzhou.aliyuncs.com/orders_${year}_${platform}.csv?Expires=1719475827&OSSAccessKeyId=TMP.3Kh7gYfnvoTrpYWwEUKnvfkgnhQoRgbty3KnkD661JGPM9LxcWHisW6Y4uFWdN8tbGmChnEVLxGCDnwbFoZWFocicf6fdB&Signature=rkN%2FzrUr2bjF6tPSJ5xXnZq839Q%3D`;
-                                 // https://somle-bigdata.oss-cn-hangzhou.aliyuncs.com/orders_2021_platform1     .csv?Expires=1719475827&OSSAccessKeyId=TMP.3Kh7gYfnvoTrpYWwEUKnvfkgnhQoRgbty3KnkD661JGPM9LxcWHisW6Y4uFWdN8tbGmChnEVLxGCDnwbFoZWFocicf6fdB&Signature=rkN%2FzrUr2bjF6tPSJ5xXnZq839Q%3D
-            // Fetch CSV data
+            const selectedPlatform = document.getElementById("platform-select").value;
+            const csvFilePath = `https://somle-huaweiyun.obs.ap-southeast-1.myhuaweicloud.com/heatMap.csv`;
+
             fetch(csvFilePath)
                 .then(response => response.text())
                 .then(csvText => {
-                    getPoints(csvText, function(points, markers) {
+                    updatePlatformOptions(csvText);
+                    getPoints(csvText, selectedPlatform, function(points, markerDataArray) {
                         if (heatmap) {
                             heatmap.setMap(null);
                         }
@@ -63,7 +98,10 @@
                             map: map,
                         });
 
-                        markers.forEach(markerData => {
+                        markers.forEach(marker => marker.setMap(null)); // Remove existing markers
+                        markers = []; // Clear the markers array
+
+                        markerDataArray.forEach(markerData => {
                             const marker = new google.maps.Marker({
                                 position: markerData.position,
                                 map: map,
@@ -76,6 +114,8 @@
                             marker.addListener('click', () => {
                                 infoWindow.open(map, marker);
                             });
+
+                            markers.push(marker); // Store the new marker
                         });
                     });
                 })
@@ -86,6 +126,7 @@
         document.getElementById("change-gradient").addEventListener("click", changeGradient);
         document.getElementById("change-opacity").addEventListener("click", changeOpacity);
         document.getElementById("change-radius").addEventListener("click", changeRadius);
+        document.getElementById("toggle-markers").addEventListener("click", toggleMarkers);
     }
 
     function toggleHeatmap() {
@@ -121,24 +162,66 @@
         heatmap.set("opacity", heatmap.get("opacity") ? null : 0.2);
     }
 
-    function getPoints(csvText, callback) {
-        const points = [];
-        const markers = [];
+    function toggleMarkers() {
+        markersVisible = !markersVisible;
+        markers.forEach(marker => marker.setMap(markersVisible ? map : null));
+    }
+
+    function updatePlatformOptions(csvText) {
+        const platforms = new Set();
         Papa.parse(csvText, {
             header: true,
             dynamicTyping: true,
             complete: function(results) {
                 results.data.forEach(row => {
-                    if (row.lat && row.lon && row.name) {
-                        const position = new google.maps.LatLng(row.lat, row.lon);
-                        points.push(position);
-                        markers.push({
-                            position: position,
-                            info: `Order: ${row.name}<br>Lat: ${row.lat}<br>Lon: ${row.lon}`
-                        });
+                    if (row.original_platform) {
+                        platforms.add(row.original_platform);
                     }
                 });
-                callback(points, markers);
+
+                const platformSelect = document.getElementById("platform-select");
+                platformSelect.innerHTML = '<option value="all">All Platforms</option>';
+
+                platforms.forEach(platform => {
+                    const option = document.createElement("option");
+                    option.value = platform;
+                    option.textContent = platform;
+                    platformSelect.appendChild(option);
+                });
+            }
+        });
+    }
+
+    function getPoints(csvText, selectedPlatform, callback) {
+        const points = [];
+        const markerDataArray = [];
+        Papa.parse(csvText, {
+            header: true,
+            dynamicTyping: true,
+            complete: function(results) {
+                results.data.forEach(row => {
+                    if (row.lat && row.lon && row.name && row.original_platform) {
+                        if (selectedPlatform === 'all' || row.original_platform === selectedPlatform) {
+                            const position = new google.maps.LatLng(row.lat, row.lon);
+                            points.push(position);
+                            const infoContent = `Buyer Name: ${row.original_buyer_name}<br>
+                                                City Name: ${row.original_city_name}<br>
+                                                Platform: ${row.original_platform}<br>
+                                                Database: ${row.original_database}<br>
+                                                Warehouse Ship Date: ${row.original_warehouse_ship_date}<br>
+                                                Order ID: ${row.original_order_id}<br>
+                                                Product SKU Info: ${row.original_product_sku_info}<br>
+                                                Amount Paid: ${row.original_amountpaid}<br>
+                                                Lat: ${row.lat}<br>
+                                                Lon: ${row.lon}`;
+                            markerDataArray.push({
+                                position: position,
+                                info: infoContent
+                            });
+                        }
+                    }
+                });
+                callback(points, markerDataArray);
             }
         });
     }
