@@ -105,7 +105,6 @@
     <button id="change-gradient">改变渐变</button>
     <button id="change-opacity">改变不透明度</button>
     <button id="change-radius">改变半径</button>
-    <button id="toggle-markers">切换标记</button>
 </div>
 
 <script>
@@ -117,6 +116,7 @@
             document.getElementById('password-prompt').style.display = 'none';
             document.querySelectorAll('.controls').forEach(el => el.style.display = 'block');
             document.getElementById('map').style.display = 'block';
+            loadData(); // 自动加载数据
         } else {
             document.getElementById('error-message').style.display = 'block';
         }
@@ -132,59 +132,64 @@
             mapTypeId: "satellite",
         });
 
-        document.getElementById("load-data").addEventListener("click", function() {
-            const year = document.getElementById("year-select").value;
-            const selectedPlatform = document.getElementById("platform-select").value;
-            const selectedSku = document.getElementById("sku-select").value;
-            const csvFilePath = `https://somle-huaweiyun.obs.ap-southeast-1.myhuaweicloud.com/geo2024_7_4.csv`;
-
-            fetch(csvFilePath)
-                .then(response => response.text())
-                .then(csvText => {
-                    updatePlatformAndSkuOptions(csvText);
-                    getPoints(csvText, selectedPlatform, selectedSku, function(points, markerDataArray) {
-                        if (heatmap) {
-                            heatmap.setMap(null);
-                        }
-
-                        heatmap = new google.maps.visualization.HeatmapLayer({
-                            data: points,
-                            map: map,
-                        });
-
-                        markers.forEach(marker => marker.setMap(null)); // Remove existing markers
-                        markers = []; // Clear the markers array
-
-                        markerDataArray.forEach(markerData => {
-                            const marker = new google.maps.Marker({
-                                position: markerData.position,
-                                map: map,
-                            });
-
-                            const infoWindow = new google.maps.InfoWindow({
-                                content: markerData.info,
-                            });
-
-                            marker.addListener('click', () => {
-                                infoWindow.open(map, marker);
-                            });
-
-                            markers.push(marker); // Store the new marker
-                        });
-                    });
-
-                    // Reset platform and sku options to the previously selected values
-                    document.getElementById("platform-select").value = selectedPlatform;
-                    document.getElementById("sku-select").value = selectedSku;
-                })
-                .catch(error => console.error('Error fetching CSV file:', error));
-        });
+        document.getElementById("load-data").addEventListener("click", loadData);
 
         document.getElementById("toggle-heatmap").addEventListener("click", toggleHeatmap);
         document.getElementById("change-gradient").addEventListener("click", changeGradient);
         document.getElementById("change-opacity").addEventListener("click", changeOpacity);
         document.getElementById("change-radius").addEventListener("click", changeRadius);
-        document.getElementById("toggle-markers").addEventListener("click", toggleMarkers);
+    }
+
+    function loadData() {
+        const year = document.getElementById("year-select").value;
+        const selectedPlatform = document.getElementById("platform-select").value;
+        const selectedSku = document.getElementById("sku-select").value;
+        const csvFilePath = `https://somle-huaweiyun.obs.ap-southeast-1.myhuaweicloud.com/geo2024_7_4.csv`;
+
+        fetch(csvFilePath)
+            .then(response => response.text())
+            .then(csvText => {
+                updatePlatformAndSkuOptions(csvText);
+                getPoints(csvText, selectedPlatform, selectedSku, function(points, markerDataArray) {
+                    if (heatmap) {
+                        heatmap.setMap(null);
+                    }
+
+                    heatmap = new google.maps.visualization.HeatmapLayer({
+                        data: points,
+                        map: map,
+                    });
+
+                    markers.forEach(marker => marker.setMap(null)); // Remove existing markers
+                    markers = []; // Clear the markers array
+
+                    markerDataArray.forEach(markerData => {
+                        const marker = new google.maps.Marker({
+                            position: markerData.position,
+                            map: map,
+                        });
+
+                        const infoWindow = new google.maps.InfoWindow({
+                            content: markerData.info,
+                        });
+
+                        marker.addListener('mouseover', () => {
+                            infoWindow.open(map, marker);
+                        });
+
+                        marker.addListener('mouseout', () => {
+                            infoWindow.close();
+                        });
+
+                        markers.push(marker); // Store the new marker
+                    });
+                });
+
+                // Reset platform and sku options to the previously selected values
+                document.getElementById("platform-select").value = selectedPlatform;
+                document.getElementById("sku-select").value = selectedSku;
+            })
+            .catch(error => console.error('Error fetching CSV file:', error));
     }
 
     function toggleHeatmap() {
@@ -220,11 +225,6 @@
         heatmap.set("opacity", heatmap.get("opacity") ? null : 0.2);
     }
 
-    function toggleMarkers() {
-        markersVisible = !markersVisible;
-        markers.forEach(marker => marker.setMap(markersVisible ? map : null));
-    }
-
     function updatePlatformAndSkuOptions(csvText) {
         const platforms = new Set();
         const skus = new Set();
@@ -241,10 +241,14 @@
                     }
                 });
 
+                // 将平台和 SKU 集合转换为数组并排序
+                const sortedPlatforms = Array.from(platforms).sort();
+                const sortedSkus = Array.from(skus).sort();
+
                 const platformSelect = document.getElementById("platform-select");
                 platformSelect.innerHTML = '<option value="all">所有平台</option>';
 
-                platforms.forEach(platform => {
+                sortedPlatforms.forEach(platform => {
                     const option = document.createElement("option");
                     option.value = platform;
                     option.textContent = platform;
@@ -253,9 +257,14 @@
 
                 const skuSelect = document.getElementById("sku-select");
                 const datalist = document.getElementById("sku-options");
-                datalist.innerHTML = '<option value="all">所有SKU</option>';
+                datalist.innerHTML = '';
 
-                skus.forEach(sku => {
+                const allOption = document.createElement("option");
+                allOption.value = 'all';
+                allOption.textContent = '所有SKU';
+                datalist.appendChild(allOption);
+
+                sortedSkus.forEach(sku => {
                     const option = document.createElement("option");
                     option.value = sku;
                     option.textContent = sku;
