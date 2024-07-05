@@ -1,7 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh">
 <head>
-    <title>Heatmap and Markers</title>
+    <meta charset="UTF-8">
+    <title>热图和标记</title>
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAJhMG_t2IcSck60ta18BPFRxiTOmXHaeU&libraries=visualization"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <style>
@@ -17,7 +18,7 @@
             margin-right: 10px;
         }
 
-        select, button {
+        select, input, button {
             padding: 10px;
             margin-right: 10px;
             border-radius: 5px;
@@ -36,59 +37,112 @@
         }
 
         #map {
-            height: 900px;
+            height: 1000px;
             width: 100%;
+        }
+
+        #password-prompt {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+        }
+
+        #password-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        #password-input {
+            padding: 10px;
+            font-size: 14px;
+            margin-bottom: 10px;
         }
     </style>
 </head>
 <body>
-<div class="controls">
-    <label for="year-select">Select Year:</label>
-    <select id="year-select">
-        <option value="2024">2024</option>
-<!--        <option value="2022">2022</option>-->
-<!--        <option value="2023">2023</option>-->
-    </select>
-
-    <label for="platform-select">Select Platform:</label>
-    <select id="platform-select">
-        <option value="all">All Platforms</option>
-    </select>
-
-    <button id="load-data">Load Data</button>
+<div id="password-prompt">
+    <div id="password-container">
+        <h2>请输入密码</h2>
+        <input type="password" id="password-input" placeholder="密码">
+        <button onclick="checkPassword()">提交</button>
+        <p id="error-message" style="color:red; display:none;">密码错误，请重试。</p>
+    </div>
 </div>
 
-<div id="map"></div>
+<div class="controls" style="display: none;">
+    <label for="year-select">选择年份:</label>
+    <select id="year-select">
+        <option value="2024">2024</option>
+    </select>
 
-<div class="controls">
-    <button id="toggle-heatmap">Toggle Heatmap</button>
-    <button id="change-gradient">Change Gradient</button>
-    <button id="change-opacity">Change Opacity</button>
-    <button id="change-radius">Change Radius</button>
-    <button id="toggle-markers">Toggle Markers</button>
+    <label for="platform-select">选择平台:</label>
+    <select id="platform-select">
+        <option value="all">所有平台</option>
+    </select>
+
+    <label for="sku-select">选择SKU:</label>
+    <input list="sku-options" id="sku-select" placeholder="所有SKU">
+    <datalist id="sku-options">
+        <option value="all">所有SKU</option>
+    </datalist>
+
+    <button id="load-data">加载数据</button>
+</div>
+
+<div id="map" style="display: none;"></div>
+
+<div class="controls" style="display: none;">
+    <button id="toggle-heatmap">切换热图</button>
+    <button id="change-gradient">改变渐变</button>
+    <button id="change-opacity">改变不透明度</button>
+    <button id="change-radius">改变半径</button>
+    <button id="toggle-markers">切换标记</button>
 </div>
 
 <script>
+    const correctPassword = 'somle';
+
+    function checkPassword() {
+        const inputPassword = document.getElementById('password-input').value;
+        if (inputPassword === correctPassword) {
+            document.getElementById('password-prompt').style.display = 'none';
+            document.querySelectorAll('.controls').forEach(el => el.style.display = 'block');
+            document.getElementById('map').style.display = 'block';
+        } else {
+            document.getElementById('error-message').style.display = 'block';
+        }
+    }
+
     let map, heatmap, markers = [];
     let markersVisible = true;
 
     function initMap() {
         map = new google.maps.Map(document.getElementById("map"), {
             zoom: 13,
-            center: { lat: 34.981213, lng: 139.828853 },
+            center: { lat: 38.469044, lng: -90.7623135 },
             mapTypeId: "satellite",
         });
 
         document.getElementById("load-data").addEventListener("click", function() {
             const year = document.getElementById("year-select").value;
             const selectedPlatform = document.getElementById("platform-select").value;
-            const csvFilePath = `https://somle-huaweiyun.obs.ap-southeast-1.myhuaweicloud.com/heatMap.csv`;
+            const selectedSku = document.getElementById("sku-select").value;
+            const csvFilePath = `https://somle-huaweiyun.obs.ap-southeast-1.myhuaweicloud.com/geo2024_7_4.csv`;
 
             fetch(csvFilePath)
                 .then(response => response.text())
                 .then(csvText => {
-                    updatePlatformOptions(csvText);
-                    getPoints(csvText, selectedPlatform, function(points, markerDataArray) {
+                    updatePlatformAndSkuOptions(csvText);
+                    getPoints(csvText, selectedPlatform, selectedSku, function(points, markerDataArray) {
                         if (heatmap) {
                             heatmap.setMap(null);
                         }
@@ -118,6 +172,10 @@
                             markers.push(marker); // Store the new marker
                         });
                     });
+
+                    // Reset platform and sku options to the previously selected values
+                    document.getElementById("platform-select").value = selectedPlatform;
+                    document.getElementById("sku-select").value = selectedSku;
                 })
                 .catch(error => console.error('Error fetching CSV file:', error));
         });
@@ -167,8 +225,9 @@
         markers.forEach(marker => marker.setMap(markersVisible ? map : null));
     }
 
-    function updatePlatformOptions(csvText) {
+    function updatePlatformAndSkuOptions(csvText) {
         const platforms = new Set();
+        const skus = new Set();
         Papa.parse(csvText, {
             header: true,
             dynamicTyping: true,
@@ -177,10 +236,13 @@
                     if (row.original_platform) {
                         platforms.add(row.original_platform);
                     }
+                    if (row.original_sku) {
+                        skus.add(row.original_sku);
+                    }
                 });
 
                 const platformSelect = document.getElementById("platform-select");
-                platformSelect.innerHTML = '<option value="all">All Platforms</option>';
+                platformSelect.innerHTML = '<option value="all">所有平台</option>';
 
                 platforms.forEach(platform => {
                     const option = document.createElement("option");
@@ -188,11 +250,22 @@
                     option.textContent = platform;
                     platformSelect.appendChild(option);
                 });
+
+                const skuSelect = document.getElementById("sku-select");
+                const datalist = document.getElementById("sku-options");
+                datalist.innerHTML = '<option value="all">所有SKU</option>';
+
+                skus.forEach(sku => {
+                    const option = document.createElement("option");
+                    option.value = sku;
+                    option.textContent = sku;
+                    datalist.appendChild(option);
+                });
             }
         });
     }
 
-    function getPoints(csvText, selectedPlatform, callback) {
+    function getPoints(csvText, selectedPlatform, selectedSku, callback) {
         const points = [];
         const markerDataArray = [];
         Papa.parse(csvText, {
@@ -200,20 +273,20 @@
             dynamicTyping: true,
             complete: function(results) {
                 results.data.forEach(row => {
-                    if (row.lat && row.lon && row.name && row.original_platform) {
-                        if (selectedPlatform === 'all' || row.original_platform === selectedPlatform) {
+                    if (row.lat && row.lon && row.name && row.original_platform && row.original_sku) {
+                        if ((selectedPlatform === 'all' || row.original_platform === selectedPlatform) &&
+                            (selectedSku === 'all' || row.original_sku === selectedSku)) {
                             const position = new google.maps.LatLng(row.lat, row.lon);
                             points.push(position);
-                            const infoContent = `Buyer Name: ${row.original_buyer_name}<br>
-                                                City Name: ${row.original_city_name}<br>
-                                                Platform: ${row.original_platform}<br>
-                                                Database: ${row.original_database}<br>
-                                                Warehouse Ship Date: ${row.original_warehouse_ship_date}<br>
-                                                Order ID: ${row.original_order_id}<br>
-                                                Product SKU Info: ${row.original_product_sku_info}<br>
-                                                Amount Paid: ${row.original_amountpaid}<br>
-                                                Lat: ${row.lat}<br>
-                                                Lon: ${row.lon}`;
+                            const streetViewUrl = `https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${row.lat},${row.lon}&fov=80&heading=70&pitch=0&key=AIzaSyCCMzvLrAgAEaj76qTEte1GnAou-JPw8i4`;
+                            const infoContent = `买家名称: ${row.original_buyer_name}<br>
+                                                国家名称: ${row.original_country_name}<br>
+                                                城市名称: ${row.original_city_name}<br>
+                                                平台: ${row.original_platform}<br>
+                                                SKU: ${row.original_sku}<br>
+                                                纬度: ${row.lat}<br>
+                                                经度: ${row.lon}<br>
+                                                <img src="${streetViewUrl}" alt="Street View Image">`;
                             markerDataArray.push({
                                 position: position,
                                 info: infoContent
