@@ -5,6 +5,7 @@
     <title>热图和标记</title>
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAJhMG_t2IcSck60ta18BPFRxiTOmXHaeU&libraries=visualization"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.0.4/pako.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -105,6 +106,7 @@
     <button id="change-gradient">改变渐变</button>
     <button id="change-opacity">改变不透明度</button>
     <button id="change-radius">改变半径</button>
+    <button id="toggle-markers">切换标记</button>
 </div>
 
 <script>
@@ -138,58 +140,62 @@
         document.getElementById("change-gradient").addEventListener("click", changeGradient);
         document.getElementById("change-opacity").addEventListener("click", changeOpacity);
         document.getElementById("change-radius").addEventListener("click", changeRadius);
+        document.getElementById("toggle-markers").addEventListener("click", toggleMarkers);
     }
 
-    function loadData() {
+    async function loadData() {
         const year = document.getElementById("year-select").value;
         const selectedPlatform = document.getElementById("platform-select").value;
         const selectedSku = document.getElementById("sku-select").value;
-        const csvFilePath = `https://somle-huaweiyun.obs.ap-southeast-1.myhuaweicloud.com/geo2024_7_4.csv`;
+        const csvFilePath = `https://somle-huaweiyun.obs.ap-southeast-1.myhuaweicloud.com/geo2024_7_22.csv.gz`;
 
-        fetch(csvFilePath)
-            .then(response => response.text())
-            .then(csvText => {
-                updatePlatformAndSkuOptions(csvText);
-                getPoints(csvText, selectedPlatform, selectedSku, function(points, markerDataArray) {
-                    if (heatmap) {
-                        heatmap.setMap(null);
-                    }
+        try {
+            const response = await fetch(csvFilePath);
+            const arrayBuffer = await response.arrayBuffer();
+            const data = new Uint8Array(arrayBuffer);
+            const decompressed = pako.ungzip(data, { to: 'string' });
+            updatePlatformAndSkuOptions(decompressed);
+            getPoints(decompressed, selectedPlatform, selectedSku, function(points, markerDataArray) {
+                if (heatmap) {
+                    heatmap.setMap(null);
+                }
 
-                    heatmap = new google.maps.visualization.HeatmapLayer({
-                        data: points,
+                heatmap = new google.maps.visualization.HeatmapLayer({
+                    data: points,
+                    map: map,
+                });
+
+                markers.forEach(marker => marker.setMap(null)); // Remove existing markers
+                markers = []; // Clear the markers array
+
+                markerDataArray.forEach(markerData => {
+                    const marker = new google.maps.Marker({
+                        position: markerData.position,
                         map: map,
                     });
 
-                    markers.forEach(marker => marker.setMap(null)); // Remove existing markers
-                    markers = []; // Clear the markers array
-
-                    markerDataArray.forEach(markerData => {
-                        const marker = new google.maps.Marker({
-                            position: markerData.position,
-                            map: map,
-                        });
-
-                        const infoWindow = new google.maps.InfoWindow({
-                            content: markerData.info,
-                        });
-
-                        marker.addListener('mouseover', () => {
-                            infoWindow.open(map, marker);
-                        });
-
-                        marker.addListener('mouseout', () => {
-                            infoWindow.close();
-                        });
-
-                        markers.push(marker); // Store the new marker
+                    const infoWindow = new google.maps.InfoWindow({
+                        content: markerData.info,
                     });
-                });
 
-                // Reset platform and sku options to the previously selected values
-                document.getElementById("platform-select").value = selectedPlatform;
-                document.getElementById("sku-select").value = selectedSku;
-            })
-            .catch(error => console.error('Error fetching CSV file:', error));
+                    marker.addListener('mouseover', () => {
+                        infoWindow.open(map, marker);
+                    });
+
+                    marker.addListener('mouseout', () => {
+                        infoWindow.close();
+                    });
+
+                    markers.push(marker); // Store the new marker
+                });
+            });
+
+            // Reset platform and sku options to the previously selected values
+            document.getElementById("platform-select").value = selectedPlatform;
+            document.getElementById("sku-select").value = selectedSku;
+        } catch (error) {
+            console.error('Error fetching or decompressing CSV file:', error);
+        }
     }
 
     function toggleHeatmap() {
@@ -206,7 +212,7 @@
             "rgba(0, 0, 255, 1)",
             "rgba(0, 0, 223, 1)",
             "rgba(0, 0, 191, 1)",
-            "rgba(0, 0, 159, 1)",
+            "rgba(0, 0,159, 1)",
             "rgba(0, 0, 127, 1)",
             "rgba(63, 0, 91, 1)",
             "rgba(127, 0, 63, 1)",
@@ -225,6 +231,13 @@
         heatmap.set("opacity", heatmap.get("opacity") ? null : 0.2);
     }
 
+    function toggleMarkers() {
+        markersVisible = !markersVisible;
+        markers.forEach(marker => {
+            marker.setMap(markersVisible ? map : null);
+        });
+    }
+
     function updatePlatformAndSkuOptions(csvText) {
         const platforms = new Set();
         const skus = new Set();
@@ -233,11 +246,11 @@
             dynamicTyping: true,
             complete: function(results) {
                 results.data.forEach(row => {
-                    if (row.original_platform) {
-                        platforms.add(row.original_platform);
+                    if (row.platform) {
+                        platforms.add(row.platform);
                     }
-                    if (row.original_sku) {
-                        skus.add(row.original_sku);
+                    if (row.sku) {
+                        skus.add(row.sku);
                     }
                 });
 
@@ -282,19 +295,19 @@
             dynamicTyping: true,
             complete: function(results) {
                 results.data.forEach(row => {
-                    if (row.lat && row.lon && row.name && row.original_platform && row.original_sku) {
-                        if ((selectedPlatform === 'all' || row.original_platform === selectedPlatform) &&
-                            (selectedSku === 'all' || row.original_sku === selectedSku)) {
-                            const position = new google.maps.LatLng(row.lat, row.lon);
+                    if (row.latitude && row.longitude && row.platform && row.sku) {
+                        if ((selectedPlatform === 'all' || row.platform === selectedPlatform) &&
+                            (selectedSku === 'all' || row.sku === selectedSku)) {
+                            const position = new google.maps.LatLng(row.latitude, row.longitude);
                             points.push(position);
-                            const streetViewUrl = `https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${row.lat},${row.lon}&fov=80&heading=70&pitch=0&key=AIzaSyCCMzvLrAgAEaj76qTEte1GnAou-JPw8i4`;
-                            const infoContent = `买家名称: ${row.original_buyer_name}<br>
-                                                国家名称: ${row.original_country_name}<br>
-                                                城市名称: ${row.original_city_name}<br>
-                                                平台: ${row.original_platform}<br>
-                                                SKU: ${row.original_sku}<br>
-                                                纬度: ${row.lat}<br>
-                                                经度: ${row.lon}<br>
+                            const streetViewUrl = `https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${row.latitude},${row.longitude}&fov=80&heading=70&pitch=0&key=AIzaSyCCMzvLrAgAEaj76qTEte1GnAou-JPw8i4`;
+                            const infoContent = `买家名称: ${row.buyer_name}<br>
+                                                国家名称: ${row.country_name}<br>
+                                                城市名称: ${row.city_name}<br>
+                                                平台: ${row.platform}<br>
+                                                SKU: ${row.sku}<br>
+                                                纬度: ${row.latitude}<br>
+                                                经度: ${row.longitude}<br>
                                                 <img src="${streetViewUrl}" alt="Street View Image">`;
                             markerDataArray.push({
                                 position: position,
