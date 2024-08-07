@@ -148,7 +148,7 @@
     async function loadOptions() {
         try {
             // 假设后端提供了一个 API 来获取平台和 SKU 选项
-            const response = await fetch('http://389af26b.r18.cpolar.top/api/options');
+            const response = await fetch('https://389af26b.r18.cpolar.top/api/options');
             // const response = await fetch('http://localhost:3000/api/options');
             const { platforms, skus } = await response.json();
 
@@ -181,7 +181,7 @@
         const year = document.getElementById("year-select").value;
         const selectedPlatform = document.getElementById("platform-select").value;
         const selectedSku = document.getElementById("sku-select").value;
-        const apiUrl = `http://389af26b.r18.cpolar.top/api/data?year=${year}&platform=${selectedPlatform}&sku=${selectedSku}`;
+        const apiUrl = `https://389af26b.r18.cpolar.top/api/data?year=${year}&platform=${selectedPlatform}&sku=${selectedSku}`;
         // const apiUrl = `http://localhost:3000/api/data?year=${year}&platform=${selectedPlatform}&sku=${selectedSku}`;
 
         try {
