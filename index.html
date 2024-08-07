@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <title>热图和标记</title>
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAJhMG_t2IcSck60ta18BPFRxiTOmXHaeU&libraries=visualization"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.0.4/pako.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -83,17 +81,20 @@
     <label for="year-select">选择年份:</label>
     <select id="year-select">
         <option value="2024">2024</option>
+        <!-- 可以在这里添加更多的年份选项 -->
     </select>
 
     <label for="platform-select">选择平台:</label>
     <select id="platform-select">
         <option value="all">所有平台</option>
+        <!-- 动态添加的平台选项 -->
     </select>
 
     <label for="sku-select">选择SKU:</label>
     <input list="sku-options" id="sku-select" placeholder="所有SKU">
     <datalist id="sku-options">
         <option value="all">所有SKU</option>
+        <!-- 动态添加的SKU选项 -->
     </datalist>
 
     <button id="load-data">加载数据</button>
@@ -118,13 +119,14 @@
             document.getElementById('password-prompt').style.display = 'none';
             document.querySelectorAll('.controls').forEach(el => el.style.display = 'block');
             document.getElementById('map').style.display = 'block';
-            loadData(); // 自动加载数据
+            loadOptions(); // 加载平台和SKU选项
         } else {
             document.getElementById('error-message').style.display = 'block';
         }
     }
 
-    let map, heatmap, markers = [];
+    let map, heatmap;
+    let markers = [];
     let markersVisible = true;
 
     function initMap() {
@@ -143,39 +145,98 @@
         document.getElementById("toggle-markers").addEventListener("click", toggleMarkers);
     }
 
+    async function loadOptions() {
+        try {
+            // 假设后端提供了一个 API 来获取平台和 SKU 选项
+            const response = await fetch('http://389af26b.r18.cpolar.top/api/options');
+            // const response = await fetch('http://localhost:3000/api/options');
+            const { platforms, skus } = await response.json();
+
+            // 填充平台选项
+            const platformSelect = document.getElementById("platform-select");
+            platformSelect.innerHTML = '<option value="all">所有平台</option>';
+            platforms.forEach(platform => {
+                const option = document.createElement("option");
+                option.value = platform;
+                option.textContent = platform;
+                platformSelect.appendChild(option);
+            });
+
+            // 填充SKU选项
+            const skuOptions = document.getElementById("sku-options");
+            skuOptions.innerHTML = '<option value="all">所有SKU</option>';
+            skus.forEach(sku => {
+                const option = document.createElement("option");
+                option.value = sku;
+                option.textContent = sku;
+                skuOptions.appendChild(option);
+            });
+
+        } catch (error) {
+            console.error('Error loading options:', error);
+        }
+    }
+
     async function loadData() {
         const year = document.getElementById("year-select").value;
         const selectedPlatform = document.getElementById("platform-select").value;
         const selectedSku = document.getElementById("sku-select").value;
-        const csvFilePath = `https://somle-huaweiyun.obs.ap-southeast-1.myhuaweicloud.com/geo2024_7_22.csv.gz`;
+        const apiUrl = `http://389af26b.r18.cpolar.top/api/data?year=${year}&platform=${selectedPlatform}&sku=${selectedSku}`;
+        // const apiUrl = `http://localhost:3000/api/data?year=${year}&platform=${selectedPlatform}&sku=${selectedSku}`;
 
         try {
-            const response = await fetch(csvFilePath);
-            const arrayBuffer = await response.arrayBuffer();
-            const data = new Uint8Array(arrayBuffer);
-            const decompressed = pako.ungzip(data, { to: 'string' });
-            updatePlatformAndSkuOptions(decompressed);
-            getPoints(decompressed, selectedPlatform, selectedSku, function(points, markerDataArray) {
-                if (heatmap) {
-                    heatmap.setMap(null);
+            const response = await fetch(apiUrl);
+            const data = await response.json();
+            console.log('Fetched data:', data);
+
+            if (!Array.isArray(data)) {
+                throw new Error('Expected array but got something else');
+            }
+
+            const points = data.map(row => {
+                if (row.latitude && row.longtitude) {
+                    return new google.maps.LatLng(row.latitude, row.longtitude);
                 }
+                return null;
+            }).filter(point => point !== null);
 
-                heatmap = new google.maps.visualization.HeatmapLayer({
-                    data: points,
-                    map: map,
-                });
+            // 移除现有的热力图层
+            if (heatmap) {
+                heatmap.setMap(null);
+            }
 
-                markers.forEach(marker => marker.setMap(null)); // Remove existing markers
-                markers = []; // Clear the markers array
+            // 创建新的热力图层
+            heatmap = new google.maps.visualization.HeatmapLayer({
+                data: points,
+                map: map,
+            });
 
-                markerDataArray.forEach(markerData => {
+            // 移除现有的标记
+            markers.forEach(marker => marker.setMap(null));
+            markers = [];
+
+            // 添加新的标记
+            data.forEach(row => {
+                if (row.latitude && row.longtitude) {
                     const marker = new google.maps.Marker({
-                        position: markerData.position,
-                        map: map,
+                        position: new google.maps.LatLng(row.latitude, row.longtitude),
+                        map: markersVisible ? map : null,
                     });
 
+                    const streetViewUrl = `https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${row.latitude},${row.longtitude}&fov=80&heading=70&pitch=0&key=AIzaSyCCMzvLrAgAEaj76qTEte1GnAou-JPw8i4`;
+                    const infoContent = `
+                        买家名称: ${row.buyer_name}<br>
+                        国家名称: ${row.country_code}<br>
+                        城市名称: ${row.city_name}<br>
+                        平台: ${row.platform}<br>
+                        SKU: ${row.sku}<br>
+                        纬度: ${row.latitude}<br>
+                        经度: ${row.longtitude}<br>
+                        <img src="${streetViewUrl}" alt="Street View Image">
+                    `;
+
                     const infoWindow = new google.maps.InfoWindow({
-                        content: markerData.info,
+                        content: infoContent,
                     });
 
                     marker.addListener('mouseover', () => {
@@ -186,15 +247,12 @@
                         infoWindow.close();
                     });
 
-                    markers.push(marker); // Store the new marker
-                });
+                    markers.push(marker);
+                }
             });
 
-            // Reset platform and sku options to the previously selected values
-            document.getElementById("platform-select").value = selectedPlatform;
-            document.getElementById("sku-select").value = selectedSku;
         } catch (error) {
-            console.error('Error fetching or decompressing CSV file:', error);
+            console.error('Error fetching data:', error);
         }
     }
 
@@ -235,89 +293,6 @@
         markersVisible = !markersVisible;
         markers.forEach(marker => {
             marker.setMap(markersVisible ? map : null);
-        });
-    }
-
-    function updatePlatformAndSkuOptions(csvText) {
-        const platforms = new Set();
-        const skus = new Set();
-        Papa.parse(csvText, {
-            header: true,
-            dynamicTyping: true,
-            complete: function(results) {
-                results.data.forEach(row => {
-                    if (row.platform) {
-                        platforms.add(row.platform);
-                    }
-                    if (row.sku) {
-                        skus.add(row.sku);
-                    }
-                });
-
-                // 将平台和 SKU 集合转换为数组并排序
-                const sortedPlatforms = Array.from(platforms).sort();
-                const sortedSkus = Array.from(skus).sort();
-
-                const platformSelect = document.getElementById("platform-select");
-                platformSelect.innerHTML = '<option value="all">所有平台</option>';
-
-                sortedPlatforms.forEach(platform => {
-                    const option = document.createElement("option");
-                    option.value = platform;
-                    option.textContent = platform;
-                    platformSelect.appendChild(option);
-                });
-
-                const skuSelect = document.getElementById("sku-select");
-                const datalist = document.getElementById("sku-options");
-                datalist.innerHTML = '';
-
-                const allOption = document.createElement("option");
-                allOption.value = 'all';
-                allOption.textContent = '所有SKU';
-                datalist.appendChild(allOption);
-
-                sortedSkus.forEach(sku => {
-                    const option = document.createElement("option");
-                    option.value = sku;
-                    option.textContent = sku;
-                    datalist.appendChild(option);
-                });
-            }
-        });
-    }
-
-    function getPoints(csvText, selectedPlatform, selectedSku, callback) {
-        const points = [];
-        const markerDataArray = [];
-        Papa.parse(csvText, {
-            header: true,
-            dynamicTyping: true,
-            complete: function(results) {
-                results.data.forEach(row => {
-                    if (row.latitude && row.longitude && row.platform && row.sku) {
-                        if ((selectedPlatform === 'all' || row.platform === selectedPlatform) &&
-                            (selectedSku === 'all' || row.sku === selectedSku)) {
-                            const position = new google.maps.LatLng(row.latitude, row.longitude);
-                            points.push(position);
-                            const streetViewUrl = `https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${row.latitude},${row.longitude}&fov=80&heading=70&pitch=0&key=AIzaSyCCMzvLrAgAEaj76qTEte1GnAou-JPw8i4`;
-                            const infoContent = `买家名称: ${row.buyer_name}<br>
-                                                国家名称: ${row.country_name}<br>
-                                                城市名称: ${row.city_name}<br>
-                                                平台: ${row.platform}<br>
-                                                SKU: ${row.sku}<br>
-                                                纬度: ${row.latitude}<br>
-                                                经度: ${row.longitude}<br>
-                                                <img src="${streetViewUrl}" alt="Street View Image">`;
-                            markerDataArray.push({
-                                position: position,
-                                info: infoContent
-                            });
-                        }
-                    }
-                });
-                callback(points, markerDataArray);
-            }
         });
     }
 
