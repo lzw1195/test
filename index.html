@@ -157,7 +157,7 @@
 
     async function loadOptions() {
         try {
-            const response = await fetch('https://389af26b.r18.cpolar.top/api/options');
+            const response = await fetch('https://614bf4ac.r18.cpolar.top/api/options');
             const { platforms, skus } = await response.json();
 
             const platformSelect = document.getElementById("platform-select");
@@ -187,7 +187,7 @@
         const year = document.getElementById("year-select").value;
         const selectedPlatform = document.getElementById("platform-select").value;
         const selectedSku = document.getElementById("sku-select").value;
-        const apiUrl = `https://389af26b.r18.cpolar.top/api/data?year=${year}&platform=${selectedPlatform}&sku=${selectedSku}`;
+        const apiUrl = `https://614bf4ac.r18.cpolar.top/api/data?year=${year}&platform=${selectedPlatform}&sku=${selectedSku}`;
 
         try {
             const response = await fetch(apiUrl);
