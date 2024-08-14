@@ -150,7 +150,8 @@
 
     async function loadOptions() {
         try {
-            const response = await fetch('http://intra.somle.com:55006/api/options');
+            // const response = await fetch('http://intra.somle.com:55006/api/options');
+            const response = await fetch('intra.somle.com:55006/api/options');
             let { platforms, skus, years } = await response.json();
 
             // 排序选项
@@ -188,7 +189,8 @@
         const selectedPlatforms = $('#platform-select').val();
         const selectedSkus = $('#sku-select').val();
 
-        const apiUrl = `http://intra.somle.com:55006/api/data?years=${selectedYears.join(',')}&platforms=${selectedPlatforms.join(',')}&skus=${selectedSkus.join(',')}`;
+        // const apiUrl = `http://intra.somle.com:55006/api/data?years=${selectedYears.join(',')}&platforms=${selectedPlatforms.join(',')}&skus=${selectedSkus.join(',')}`;
+        const apiUrl = `intra.somle.com:55006/api/data?years=${selectedYears.join(',')}&platforms=${selectedPlatforms.join(',')}&skus=${selectedSkus.join(',')}`;
 
         try {
             const response = await fetch(apiUrl);
@@ -320,12 +322,7 @@
             document.head.appendChild(script);
         }
     }
-    if (window.location.protocol.indexOf('https') == 0){
-        var el = document.createElement('meta')
-        el.setAttribute('http-equiv', 'Content-Security-Policy')
-        el.setAttribute('content', 'upgrade-insecure-requests')
-        document.head.append(el)
-    }
+
     document.addEventListener("DOMContentLoaded", loadScript);
 </script>
 </body>
