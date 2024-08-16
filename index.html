@@ -236,7 +236,7 @@
                     let streetViewUrl = streetViewCache.get(cacheKey);
 
                     if (!streetViewUrl) {
-                        streetViewUrl = `http://maps.googleapis.com/maps/api/streetview?size=400x400&location=${row.latitude},${row.longtitude}&fov=80&heading=70&pitch=0&key=AIzaSyCCMzvLrAgAEaj76qTEte1GnAou-JPw8i4`;
+                        streetViewUrl = `https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${row.latitude},${row.longtitude}&fov=80&heading=70&pitch=0&key=AIzaSyCCMzvLrAgAEaj76qTEte1GnAou-JPw8i4`;
 
                         // 如果缓存超过 MAX_CACHE_SIZE，删除最早的缓存项
                         if (streetViewCache.size >= MAX_CACHE_SIZE) {
