@@ -150,8 +150,7 @@
 
     async function loadOptions() {
         try {
-            // const response = await fetch('http://intra.somle.com:55006/api/options');
-            const response = await fetch('intra.somle.com:55006/api/options');
+            const response = await fetch('https://kerwin.cpolar.cn/api/options');
             let { platforms, skus, years } = await response.json();
 
             // 排序选项
@@ -189,8 +188,7 @@
         const selectedPlatforms = $('#platform-select').val();
         const selectedSkus = $('#sku-select').val();
 
-        // const apiUrl = `http://intra.somle.com:55006/api/data?years=${selectedYears.join(',')}&platforms=${selectedPlatforms.join(',')}&skus=${selectedSkus.join(',')}`;
-        const apiUrl = `intra.somle.com:55006/api/data?years=${selectedYears.join(',')}&platforms=${selectedPlatforms.join(',')}&skus=${selectedSkus.join(',')}`;
+        const apiUrl = `https://kerwin.cpolar.cn/api/data?years=${selectedYears.join(',')}&platforms=${selectedPlatforms.join(',')}&skus=${selectedSkus.join(',')}`;
 
         try {
             const response = await fetch(apiUrl);
@@ -238,7 +236,7 @@
                     let streetViewUrl = streetViewCache.get(cacheKey);
 
                     if (!streetViewUrl) {
-                        streetViewUrl = `https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${row.latitude},${row.longtitude}&fov=80&heading=70&pitch=0&key=AIzaSyCCMzvLrAgAEaj76qTEte1GnAou-JPw8i4`;
+                        streetViewUrl = `http://maps.googleapis.com/maps/api/streetview?size=400x400&location=${row.latitude},${row.longtitude}&fov=80&heading=70&pitch=0&key=AIzaSyCCMzvLrAgAEaj76qTEte1GnAou-JPw8i4`;
 
                         // 如果缓存超过 MAX_CACHE_SIZE，删除最早的缓存项
                         if (streetViewCache.size >= MAX_CACHE_SIZE) {
