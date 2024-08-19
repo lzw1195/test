@@ -8,13 +8,14 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: github-pages  # 使用配置的 github-pages 环境
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
 
     - name: Replace API keys
       run: |
-        sed -i 's/GOOGLE_MAPS_API_KEY_PLACEHOLDER/${{ secrets.GOOGLE_MAPS_API_KEY}}/g' index.html
+        sed -i 's/GOOGLE_MAPS_API_KEY_PLACEHOLDER/${{ secrets.GOOGLE_MAPS_API_KEY }}/g' index.html
 
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v3  # 使用 GitHub Actions 部署到 GitHub Pages
