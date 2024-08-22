@@ -150,7 +150,7 @@
 
     async function loadOptions() {
         try {
-            const response = await fetch('https://kerwin.cpolar.cn/api/options');
+            const response = await fetch('https://kerwin.org.cn/api/options');
             let { platforms, skus, years } = await response.json();
 
             // 排序选项
@@ -188,7 +188,7 @@
         const selectedPlatforms = $('#platform-select').val();
         const selectedSkus = $('#sku-select').val();
 
-        const apiUrl = `https://kerwin.cpolar.cn/api/data?years=${selectedYears.join(',')}&platforms=${selectedPlatforms.join(',')}&skus=${selectedSkus.join(',')}`;
+        const apiUrl = `https://kerwin.org.cn/api/data?years=${selectedYears.join(',')}&platforms=${selectedPlatforms.join(',')}&skus=${selectedSkus.join(',')}`;
 
         try {
             const response = await fetch(apiUrl);
